@@ -5,48 +5,11 @@
 
 const Alexa = require('ask-sdk');
 
-/*
-    Static list of facts across 3 categories that serve as
-    the free and premium content served by the Skill
-*/
-const ALL_FACTS = [
-  { type: 'free', fact: 'There are 365 days in a year, except leap years, which have 366 days.' },
-  { type: 'free', fact: 'What goes up, must come down.  Except when it doesn\'t.' },
-  { type: 'free', fact: 'Two wrongs don\'t make a right, but three lefts do.' },
-  { type: 'free', fact: 'There are 24 hours in a day.' },
-  { type: 'science', fact: 'There is enough DNA in an average person\'s body to stretch from the sun to Pluto and back — 17 times.' },
-  { type: 'science', fact: 'The average human body carries ten times more bacterial cells than human cells.' },
-  { type: 'science', fact: 'It can take a photon 40,000 years to travel from the core of the sun to its surface, but only 8 minutes to travel the rest of the way to Earth.' },
-  { type: 'science', fact: 'At over 2000 kilometers long, The Great Barrier Reef is the largest living structure on Earth.' },
-  { type: 'science', fact: 'There are 8 times as many atoms in a teaspoonful of water as there are teaspoonfuls of water in the Atlantic ocean.' },
-  { type: 'science', fact: 'The average person walks the equivalent of five times around the world in a lifetime.' },
-  { type: 'science', fact: 'When Helium is cooled to absolute zero it flows against gravity and will start running up and over the lip of a glass container!' },
-  { type: 'science', fact: 'An individual blood cell takes about 60 seconds to make a complete circuit of the body.' },
-  { type: 'science', fact: 'The longest cells in the human body are the motor neurons. They can be up to 4.5 feet (1.37 meters) long and run from the lower spinal cord to the big toe.' },
-  { type: 'science', fact: 'The human eye blinks an average of 4,200,000 times a year.' },
-  { type: 'history', fact: 'The Hundred Years War actually lasted 116 years from thirteen thirty seven to fourteen fifty three.' },
-  { type: 'history', fact: 'There are ninety two known cases of nuclear bombs lost at sea.' },
-  { type: 'history', fact: 'Despite popular belief, Napoleon Bonaparte stood 5 feet 6 inch tall. Average height for men at the time.' },
-  { type: 'history', fact: 'Leonardo Da Vinci designed the first helicopter, tank, submarine, parachute and ammunition igniter... Five hundred years ago.' },
-  { type: 'history', fact: 'The shortest war on record was fought between Zanzibar and England in eighteen ninety six. Zanzibar surrendered after 38 minutes.' },
-  { type: 'history', fact: 'X-rays of the Mona Lisa show that there are 3 different versions under the present one.' },
-  { type: 'history', fact: 'At Andrew Jackson\'s funeral in 1845, his pet parrot had to be removed because it was swearing too much.' },
-  { type: 'history', fact: 'English was once a language for “commoners,” while the British elites spoke French.' },
-  { type: 'history', fact: 'In ancient Egypt, servants were smeared with honey in order to attract flies away from the pharaoh.' },
-  { type: 'history', fact: 'Ronald Reagan was a lifeguard during high school and saved 77 people’s lives.' },
-  { type: 'space', fact: 'A year on Mercury is just 88 days long.' },
-  { type: 'space', fact: 'Despite being farther from the Sun, Venus experiences higher temperatures than Mercury.' },
-  { type: 'space', fact: 'Venus rotates anti-clockwise, possibly because of a collision in the past with an asteroid.' },
-  { type: 'space', fact: 'On Mars, the Sun appears about half the size as it does on Earth.' },
-  { type: 'space', fact: 'Earth is the only planet not named after a god.' },
-  { type: 'space', fact: 'Jupiter has the shortest day of all the planets.' },
-  { type: 'space', fact: 'The Milky Way galaxy will collide with the Andromeda Galaxy in about 5 billion years.' },
-  { type: 'space', fact: 'The Sun contains 99.86% of the mass in the Solar System.' },
-  { type: 'space', fact: 'The Sun is an almost perfect sphere.' },
-  { type: 'space', fact: 'A total solar eclipse can happen once every 1 to 2 years. This makes them a rare event.' },
-];
+// Add i18n modules for l10n
+const i18n = require('i18next');
+const sprintf = require('i18next-sprintf-postprocessor');
 
-const skillName = 'Premium Facts Sample';
+const STRING_SPACE = ' '; // used in prompts
 
 /*
     Function to demonstrate how to filter inSkillProduct list to get list of
@@ -63,37 +26,43 @@ function getRandomFact(facts) {
   return facts[factIndex].fact;
 }
 
-function getRandomYesNoQuestion() {
-  const questions = ['Would you like another fact?', 'Can I tell you another fact?', 'Do you want to hear another fact?'];
-  return questions[Math.floor(Math.random() * questions.length)];
+function getFilteredFacts(handlerInput, factTypesToInclude) {
+  // if no fact types are provided, lookup entitled products, and filter types accordingly
+  factTypesToInclude = factTypesToInclude || getAccesibleFactTypes(handlerInput);
+  // get available facts
+  const factsToFilter = getFactsData(handlerInput)
+  // test if all facts are accessible 
+  if (factTypesToInclude.indexOf('all_access') >= 0) {
+    return factsToFilter;
+  }
+  // filter fact based on fact types accessible
+  const filteredFacts = factsToFilter
+    .filter(record => factTypesToInclude.indexOf(record.type) >= 0);
+  return filteredFacts;
 }
 
-function getRandomGoodbye() {
-  const goodbyes = ['OK.  Goodbye!', 'Have a great day!', 'Come back again soon!'];
-  return goodbyes[Math.floor(Math.random() * goodbyes.length)];
-}
-
-function getFilteredFacts(factsToFilter, handlerInput) {
+function getAccesibleFactTypes(handlerInput) {
   // lookup entitled products, and filter accordingly
   const sessionAttributes = handlerInput.attributesManager.getSessionAttributes();
   const entitledProducts = sessionAttributes.entitledProducts;
   let factTypesToInclude;
   if (entitledProducts) {
-    factTypesToInclude = entitledProducts.map(item => item.name.toLowerCase().replace(' pack', ''));
+    //factTypesToInclude = entitledProducts.map(item => item.name.toLowerCase().replace(' pack', ''));
+    factTypesToInclude = entitledProducts.map(item => item.referenceName.toLowerCase().replace('_pack', ''));
     factTypesToInclude.push('free');
   } else {
     // no entitled products, so just give free ones
     factTypesToInclude = ['free'];
   }
   console.log(`types to include: ${factTypesToInclude}`);
-  if (factTypesToInclude.indexOf('all access') >= 0) {
-    return factsToFilter;
-  }
-  const filteredFacts = factsToFilter
-    .filter(record => factTypesToInclude.indexOf(record.type) >= 0);
-
-  return filteredFacts;
+  return factTypesToInclude;
 }
+
+function getFactsData(handlerInput) {
+  const requestAttributes = handlerInput.attributesManager.getRequestAttributes();
+  return requestAttributes.factData;
+}
+
 /*
     Helper function that returns a speakable list of product names from a list of
     entitled products.
@@ -116,25 +85,22 @@ const LaunchRequestHandler = {
     const sessionAttributes = handlerInput.attributesManager.getSessionAttributes();
     const entitledProducts = sessionAttributes.entitledProducts;
 
+    let speechText;
+    const repromptText = handlerInput.t('WELCOME.REPROMPT');
+    const skillName = handlerInput.t('SKILL_NAME');
+
     if (entitledProducts && entitledProducts.length > 0) {
       // Customer owns one or more products
-      return handlerInput.responseBuilder
-        .speak(`Welcome to ${skillName}. You currently own ${getSpeakableListOfProducts(entitledProducts)}` +
-          ' products. To hear a random fact, you could say, \'Tell me a fact\' or you can ask' +
-          ' for a specific category you have purchased, for example, say \'Tell me a science fact\'. ' +
-          ' To know what else you can buy, say, \'What can i buy?\'. So, what can I help you' +
-          ' with?')
-        .reprompt('I didn\'t catch that. What can I help you with?')
-        .getResponse();
+      speechText = handlerInput.t('WELCOME.ENTITLED', skillName, getSpeakableListOfProducts(entitledProducts));
+    } else {
+      // Not entitled to anything yet.
+      console.log('No entitledProducts');
+      speechText = handlerInput.t('WELCOME.NO_ENTITLED', skillName);
     }
 
-    // Not entitled to anything yet.
-    console.log('No entitledProducts');
     return handlerInput.responseBuilder
-      .speak(`Welcome to ${skillName}. To hear a random fact you can say 'Tell me a fact',` +
-        ' or to hear about the premium categories for purchase, say \'What can I buy\'. ' +
-        ' For help, say , \'Help me\'... So, What can I help you with?')
-      .reprompt('I didn\'t catch that. What can I help you with?')
+      .speak(speechText)
+      .reprompt(repromptText)
       .getResponse();
   },
 }; // End LaunchRequestHandler
@@ -146,12 +112,12 @@ const HelpHandler = {
       && request.intent.name === 'AMAZON.HelpIntent';
   },
   handle(handlerInput) {
+    const speechText = handlerInput.t('HELP.PROMPT');
+    const repromptText = handlerInput.t('HELP.REPROMPT');
+
     return handlerInput.responseBuilder
-      .speak('To hear a random fact, you could say, \'Tell me a fact\' or you can ask' +
-        ' for a specific category you have purchased, for example, say \'Tell me a science fact\'. ' +
-        ' To know what else you can buy, say, \'What can i buy?\'. So, what can I help you' +
-        ' with?')
-      .reprompt('I didn\'t catch that. What can I help you with?')
+      .speak(speechText)
+      .reprompt(repromptText)
       .getResponse();
   },
 };
@@ -167,10 +133,10 @@ const YesHandler = {
     console.log('In YesHandler');
 
     // reduce fact list to those purchased
-    const filteredFacts = getFilteredFacts(ALL_FACTS, handlerInput);
+    const filteredFacts = getFilteredFacts(handlerInput);
 
-    const speakOutput = `Here's your random fact: ${getRandomFact(filteredFacts)} ${getRandomYesNoQuestion()}`;
-    const repromptOutput = getRandomYesNoQuestion();
+    const speakOutput = handlerInput.t('FACT.SPEECH', 'random', getRandomFact(filteredFacts)) + STRING_SPACE + handlerInput.t('FACT.ANOTHER');
+    const repromptOutput = handlerInput.t('FACT.ANOTHER');
 
     return handlerInput.responseBuilder
       .speak(speakOutput)
@@ -188,7 +154,7 @@ const NoHandler = {
   handle(handlerInput) {
     console.log('IN: NoHandler.handle');
 
-    const speakOutput = getRandomGoodbye();
+    const speakOutput = handlerInput.t('GOODBYE');
     return handlerInput.responseBuilder
       .speak(speakOutput)
       .getResponse();
@@ -203,17 +169,18 @@ const GetCategoryFactHandler = {
   handle(handlerInput) {
     console.log('In GetCategoryFactHandler');
 
-    const factCategory = getResolvedValue(handlerInput.requestEnvelope, 'factCategory');
+    const factCategory = getResolvedId(handlerInput.requestEnvelope, 'factCategory');
     console.log(`FACT CATEGORY = XX ${factCategory} XX`);
-    let categoryFacts = ALL_FACTS;
 
     // IF THERE WAS NOT AN ENTITY RESOLUTION MATCH FOR THIS SLOT VALUE
     if (factCategory === undefined) {
       const slotValue = getSpokenValue(handlerInput.requestEnvelope, 'factCategory');
       let speakPrefix = '';
-      if (slotValue !== undefined) speakPrefix = `I heard you say ${slotValue}. `;
-      const speakOutput = `${speakPrefix} I don't have facts for that category.  You can ask for science, space, or history facts.  Which one would you like?`;
-      const repromptOutput = 'Which fact category would you like?  I have science, space, or history.';
+      if (slotValue !== undefined) {
+        speakPrefix = handlerInput.t('FACT.UNRESOLVED.PROMPT_PREFIX', slotValue);
+      }
+      const speakOutput = handlerInput.t('FACT.UNRESOLVED.PROMPT', speakPrefix);
+      const repromptOutput = handlerInput.t('FACT.UNRESOLVED.REPROMPT');
 
       return handlerInput.responseBuilder
         .speak(speakOutput)
@@ -230,13 +197,14 @@ const GetCategoryFactHandler = {
     let ms;
     let subscription;
     let categoryProduct;
+    let categoryFacts;
 
     switch (factCategory) {
       case 'free':
         // don't need to buy 'free' category, so give what was asked
-        categoryFacts = ALL_FACTS.filter(record => record.type === factCategory);
-        speakOutput = `Here's your ${factCategory} fact: ${getRandomFact(categoryFacts)} ${getRandomYesNoQuestion()}`;
-        repromptOutput = getRandomYesNoQuestion();
+        categoryFacts = getFilteredFacts(handlerInput, [factCategory]);
+        speakOutput = handlerInput.t('FACT.SPEECH', factCategory, getRandomFact(categoryFacts)) + STRING_SPACE + handlerInput.t('FACT.ANOTHER');
+        repromptOutput = handlerInput.t('FACT.ANOTHER');
         return handlerInput.responseBuilder
           .speak(speakOutput)
           .reprompt(repromptOutput)
@@ -244,16 +212,16 @@ const GetCategoryFactHandler = {
       case 'random':
       case 'all_access':
         // choose from the available facts based on entitlements
-        filteredFacts = getFilteredFacts(ALL_FACTS, handlerInput);
-        speakOutput = `Here's your random fact: ${getRandomFact(filteredFacts)} ${getRandomYesNoQuestion()}`;
-        repromptOutput = getRandomYesNoQuestion();
+        filteredFacts = getFilteredFacts(handlerInput);
+        speakOutput = handlerInput.t('FACT.SPEECH', 'random', getRandomFact(filteredFacts)) + STRING_SPACE + handlerInput.t('FACT.ANOTHER');
+        repromptOutput = handlerInput.t('FACT.ANOTHER');
         return handlerInput.responseBuilder
           .speak(speakOutput)
           .reprompt(repromptOutput)
           .getResponse();
       default:
         // IF THERE WAS AN ENTITY RESOLUTION MATCH FOR THIS SLOT VALUE
-        categoryFacts = ALL_FACTS.filter(record => record.type === factCategory);
+        categoryFacts = getFilteredFacts(handlerInput, [factCategory]);
         locale = handlerInput.requestEnvelope.request.locale;
         ms = handlerInput.serviceClientFactory.getMonetizationServiceClient();
 
@@ -263,8 +231,8 @@ const GetCategoryFactHandler = {
 
           // IF USER HAS ACCESS TO THIS PRODUCT
           if (isEntitled(subscription) || isEntitled(categoryProduct)) {
-            speakOutput = `Here's your ${factCategory} fact: ${getRandomFact(categoryFacts)} ${getRandomYesNoQuestion()}`;
-            repromptOutput = getRandomYesNoQuestion();
+            speakOutput = handlerInput.t('FACT.SPEECH', factCategory, getRandomFact(categoryFacts)) + STRING_SPACE + handlerInput.t('FACT.ANOTHER');
+            repromptOutput = handlerInput.t('FACT.ANOTHER');
 
             return handlerInput.responseBuilder
               .speak(speakOutput)
@@ -274,7 +242,7 @@ const GetCategoryFactHandler = {
 
           if (categoryProduct[0]) {
             // the category requested is an available product
-            upsellMessage = `You don't currently own the ${factCategory} pack. ${categoryProduct[0].summary} Want to learn more?`;
+            upsellMessage = handlerInput.t('FACT.UPSELL', factCategory, categoryProduct[0].summary);
 
             return handlerInput.responseBuilder
               .addDirective({
@@ -297,8 +265,8 @@ const GetCategoryFactHandler = {
             + ' This could be due to no ISPs being created and linked to the skill, the ISPs being created '
             + ' incorrectly, the locale not supporting ISPs, or the customer\'s account being from an unsupported marketplace.');
 
-          speakOutput = `I'm having trouble accessing the ${factCategory} facts right now.  Try a different category for now.  ${getRandomYesNoQuestion()}`;
-          repromptOutput = getRandomYesNoQuestion();
+          speakOutput = handlerInput.t('FACT.ERROR', factCategory) + STRING_SPACE + handlerInput.t('FACT.ANOTHER');
+          repromptOutput = handlerInput.t('FACT.ANOTHER');
 
           return handlerInput.responseBuilder
             .speak(speakOutput)
@@ -323,7 +291,7 @@ const WhatCanIBuyHandler = {
 
     // Inform the user about what products are available for purchase
     let speakOutput;
-    let repromptOutput;
+    const repromptOutput = handlerInput.t('PRODUCTS.REPROMPT');
     const locale = handlerInput.requestEnvelope.request.locale;
     const ms = handlerInput.serviceClientFactory.getMonetizationServiceClient();
 
@@ -331,10 +299,7 @@ const WhatCanIBuyHandler = {
       const purchasableProducts = result.inSkillProducts.filter(record => record.entitled === 'NOT_ENTITLED' && record.purchasable === 'PURCHASABLE');
 
       if (purchasableProducts.length > 0) {
-        speakOutput = `Products available for purchase at this time are ${getSpeakableListOfProducts(purchasableProducts)}` +
-          '. To learn more about a product, say \'Tell me more about\' followed by the product name. ' +
-          ' If you are ready to buy say \'Buy\' followed by the product name. So what can I help you with?';
-        repromptOutput = 'I didn\'t catch that. What can I help you with?';
+        speakOutput = handlerInput.t('PRODUCTS.FOR_PURCHASE', getSpeakableListOfProducts(purchasableProducts));
 
         return handlerInput.responseBuilder
           .speak(speakOutput)
@@ -344,9 +309,7 @@ const WhatCanIBuyHandler = {
       // no products!
       console.log('!!! ALERT !!!  The product list came back as empty.  This could be due to no ISPs being created and linked to the skill, the ISPs being created '
         + ' incorrectly, the locale not supporting ISPs, or the customer\'s account being from an unsupported marketplace.');
-      speakOutput = 'I\'ve checked high and low, however I can\'t find any products to offer to you right now.  Sorry about that.  '
-        + 'I can\t guarantee it, but I might be able to find something later.  Would you like a random fact now instead?';
-      repromptOutput = 'I didn\'t catch that. What can I help you with?';
+      speakOutput = handlerInput.t('PRODUCTS.NO_MORE_FOR_PURCHASE');
 
       return handlerInput.responseBuilder
         .speak(speakOutput)
@@ -370,48 +333,52 @@ const ProductDetailHandler = {
     // Describe the requested product to the user using localized information
     // from the entitlements API
 
+    let productCategory = getResolvedId(handlerInput.requestEnvelope, 'productCategory');
+    const spokenCategory = getSpokenValue(handlerInput.requestEnvelope, 'productCategory');
+
+    // nothing spoken for the slot value
+    if (spokenCategory === undefined) {
+      return handlerInput.responseBuilder
+        .addDelegateDirective()
+        .getResponse();
+    }
+
+    // NO ENTITY RESOLUTION MATCH
+    if (productCategory === undefined) {
+      const speakOutput = handlerInput.t('PRODUCTS.UNKNOWN');
+      const repromptOutput = handlerInput.t('PRODUCTS.UNKNOWN_REPROMPT');
+      return handlerInput.responseBuilder
+        .speak(speakOutput)
+        .reprompt(repromptOutput)
+        .getResponse();
+    }
+
     const locale = handlerInput.requestEnvelope.request.locale;
     const ms = handlerInput.serviceClientFactory.getMonetizationServiceClient();
 
     return ms.getInSkillProducts(locale).then(function fetchProductDetails(result) {
-      let productCategory = getResolvedValue(handlerInput.requestEnvelope, 'productCategory');
-      const spokenCategory = getSpokenValue(handlerInput.requestEnvelope, 'productCategory');
+      let speakOutput, repromptOutput;
 
-      // nothing spoken for the slot value
-      if (spokenCategory === undefined) {
-        return handlerInput.responseBuilder
-          .addDelegateDirective()
-          .getResponse();
+      if (productCategory !== 'all_access') {
+        productCategory += '_pack';
       }
-
-      // NO ENTITY RESOLUTION MATCH
-      if (productCategory === undefined) {
-        return handlerInput.responseBuilder
-          .speak('I don\'t think we have a product by that name.  Can you try again?')
-          .reprompt('I didn\'t catch that. Can you try again?')
-          .getResponse();
-      }
-
-      if (productCategory !== 'all_access') productCategory += '_pack';
 
       const product = result.inSkillProducts
         .filter(record => record.referenceName === productCategory);
 
       if (isProduct(product)) {
-        const speakOutput = `${product[0].summary}. To buy it, say Buy ${product[0].name}. `;
-        const repromptOutput = `I didn't catch that. To buy ${product[0].name}, say Buy ${product[0].name}. `;
-        return handlerInput.responseBuilder
-          .speak(speakOutput)
-          .reprompt(repromptOutput)
-          .getResponse();
+        speakOutput = handlerInput.t('PRODUCTS.DETAIL', product[0].summary, product[0].name);
+        repromptOutput = handlerInput.t('PRODUCTS.DETAIL_REPROMPT', product[0].name, product[0].name);
+      } else {
+        console.log(`!!! ALERT !!!  The requested product **${productCategory}** could not be found.  This could be due to no ISPs being created and linked to the skill, the ISPs being created `
+          + ' incorrectly, the locale not supporting ISPs, or the customer\'s account being from an unsupported marketplace.');
+        speakOutput = handlerInput.t('PRODUCTS.UNKNOWN');
+        repromptOutput = handlerInput.t('PRODUCTS.UNKNOWN_REPROMPT');
       }
 
-      console.log(`!!! ALERT !!!  The requested product **${productCategory}** could not be found.  This could be due to no ISPs being created and linked to the skill, the ISPs being created `
-        + ' incorrectly, the locale not supporting ISPs, or the customer\'s account being from an unsupported marketplace.');
-
       return handlerInput.responseBuilder
-        .speak('I can\'t find a product by that name.  Can you try again?')
-        .reprompt('I didn\'t catch that. Can you try again?')
+        .speak(speakOutput)
+        .reprompt(repromptOutput)
         .getResponse();
     });
   },
@@ -433,7 +400,7 @@ const BuyHandler = {
     const ms = handlerInput.serviceClientFactory.getMonetizationServiceClient();
 
     return ms.getInSkillProducts(locale).then(function initiatePurchase(result) {
-      let productCategory = getResolvedValue(handlerInput.requestEnvelope, 'productCategory');
+      let productCategory = getResolvedId(handlerInput.requestEnvelope, 'productCategory');
 
       // NO ENTITY RESOLUTION MATCH
       if (productCategory === undefined) {
@@ -464,9 +431,11 @@ const BuyHandler = {
       console.log(`!!! ALERT !!!  The requested product **${productCategory}** could not be found.  This could be due to no ISPs being created and linked to the skill, the ISPs being created `
         + ' incorrectly, the locale not supporting ISPs, or the customer\'s account being from an unsupported marketplace.');
 
+      const speakOutput = handlerInput.t('PRODUCTS.UNKNOWN');
+      const repromptOutput = handlerInput.t('PRODUCTS.UNKNOWN_REPROMPT');
       return handlerInput.responseBuilder
-        .speak('I don\'t think we have a product by that name.  Can you try again?')
-        .reprompt('I didn\'t catch that. Can you try again?')
+        .speak(speakOutput)
+        .reprompt(repromptOutput)
         .getResponse();
     });
   },
@@ -487,7 +456,7 @@ const CancelSubscriptionHandler = {
     const ms = handlerInput.serviceClientFactory.getMonetizationServiceClient();
 
     return ms.getInSkillProducts(locale).then(function initiateCancel(result) {
-      let productCategory = getResolvedValue(handlerInput.requestEnvelope, 'productCategory');
+      let productCategory = getResolvedId(handlerInput.requestEnvelope, 'productCategory');
 
       if (productCategory === undefined) {
         productCategory = 'all_access';
@@ -517,9 +486,11 @@ const CancelSubscriptionHandler = {
       console.log(`!!! ALERT !!!  The requested product **${productCategory}** could not be found.  This could be due to no ISPs being created and linked to the skill, the ISPs being created `
         + ' incorrectly, the locale not supporting ISPs, or the customer\'s account being from an unsupported marketplace.');
 
+      const speakOutput = handlerInput.t('PRODUCTS.UNKNOWN');
+      const repromptOutput = handlerInput.t('PRODUCTS.UNKNOWN_REPROMPT');
       return handlerInput.responseBuilder
-        .speak('I don\'t think we have a product by that name.  Can you try again?')
-        .reprompt('I didn\'t catch that. Can you try again?')
+        .speak(speakOutput)
+        .reprompt(repromptOutput)
         .getResponse();
     });
   },
@@ -541,43 +512,48 @@ const BuyResponseHandler = {
 
     return ms.getInSkillProducts(locale).then(function handlePurchaseResponse(result) {
       const product = result.inSkillProducts.filter(record => record.productId === productId);
+
+      const productKey = product[0].referenceName.replace('_pack', '').replace('all_access', '');
+      let productName = '';
+      if (productKey && productKey.length > 0) {
+        productName = handlerInput.t('CATEGORY.' + productKey.toUpperCase());
+      }
       console.log(`PRODUCT = ${JSON.stringify(product)}`);
       if (handlerInput.requestEnvelope.request.status.code === '200') {
         let speakOutput;
         let repromptOutput;
         let filteredFacts;
-        let categoryFacts = ALL_FACTS;
         switch (handlerInput.requestEnvelope.request.payload.purchaseResult) {
           case 'ACCEPTED':
-            if (product[0].referenceName !== 'all_access') categoryFacts = ALL_FACTS.filter(record => record.type === product[0].referenceName.replace('_pack', ''));
-
-            speakOutput = `You have unlocked the ${product[0].name}.  Here is your ${product[0].referenceName.replace('_pack', '').replace('all_access', '')} fact: ${getRandomFact(categoryFacts)} ${getRandomYesNoQuestion()}`;
-            repromptOutput = getRandomYesNoQuestion();
+            filteredFacts = getFilteredFacts(handlerInput, [product[0].referenceName.replace('_pack', '')]);
+            speakOutput = handlerInput.t('BUY.ACCEPTED', product[0].name) + STRING_SPACE
+              + handlerInput.t('FACT.SPEECH', productName, getRandomFact(filteredFacts)) + STRING_SPACE
+              + handlerInput.t('FACT.ANOTHER');
+            repromptOutput = handlerInput.t('FACT.ANOTHER');
             break;
           case 'DECLINED':
             if (handlerInput.requestEnvelope.request.name === 'Buy') {
               // response when declined buy request
-              speakOutput = `Thanks for your interest in the ${product[0].name}.  Would you like another random fact?`;
-              repromptOutput = 'Would you like another random fact?';
+              speakOutput = handlerInput.t('BUY.DECLINED', product[0].name) + STRING_SPACE + handlerInput.t('FACT.ANOTHER');
+              repromptOutput = handlerInput.t('FACT.ANOTHER');
               break;
             }
             // response when declined upsell request
-            filteredFacts = getFilteredFacts(ALL_FACTS, handlerInput);
-            speakOutput = `OK.  Here's a random fact: ${getRandomFact(filteredFacts)} Would you like another random fact?`;
-            repromptOutput = 'Would you like another random fact?';
+            filteredFacts = getFilteredFacts(handlerInput);
+            speakOutput = handlerInput.t('FACT.SPEECH', 'random', getRandomFact(filteredFacts)) + STRING_SPACE + handlerInput.t('FACT.ANOTHER');
+            repromptOutput = handlerInput.t('FACT.ANOTHER');
             break;
           case 'ALREADY_PURCHASED':
             // may have access to more than what was asked for, but give them a random
             // fact from the product they asked to buy
-            if (product[0].referenceName !== 'all_access') categoryFacts = ALL_FACTS.filter(record => record.type === product[0].referenceName.replace('_pack', ''));
-
-            speakOutput = `Here is your ${product[0].referenceName.replace('_pack', '').replace('all_access', '')} fact: ${getRandomFact(categoryFacts)} ${getRandomYesNoQuestion()}`;
-            repromptOutput = getRandomYesNoQuestion();
+            filteredFacts = getFilteredFacts(handlerInput, [product[0].referenceName.replace('_pack', '')]);
+            speakOutput = handlerInput.t('FACT.SPEECH', productName, getRandomFact(filteredFacts)) + STRING_SPACE + handlerInput.t('FACT.ANOTHER');
+            repromptOutput = handlerInput.t('FACT.ANOTHER');
             break;
           default:
             console.log(`unhandled purchaseResult: ${handlerInput.requestEnvelope.payload.purchaseResult}`);
-            speakOutput = `Something unexpected happened, but thanks for your interest in the ${product[0].name}.  Would you like another random fact?`;
-            repromptOutput = 'Would you like another random fact?';
+            speakOutput = handlerInput.t('BUY.ERROR', product[0].name) + STRING_SPACE + handlerInput.t('FACT.ANOTHER');
+            repromptOutput = handlerInput.t('FACT.ANOTHER');
             break;
         }
         return handlerInput.responseBuilder
@@ -588,8 +564,9 @@ const BuyResponseHandler = {
       // Something failed.
       console.log(`Connections.Response indicated failure. error: ${handlerInput.requestEnvelope.request.status.message}`);
 
+      const speakOutput = handlerInput.t('PURCHASE.ERROR');
       return handlerInput.responseBuilder
-        .speak('There was an error handling your purchase request. Please try again or contact us for help.')
+        .speak(speakOutput)
         .getResponse();
     });
   },
@@ -613,16 +590,16 @@ const CancelResponseHandler = {
       console.log(`PRODUCT = ${JSON.stringify(product)}`);
       if (handlerInput.requestEnvelope.request.status.code === '200') {
         if (handlerInput.requestEnvelope.request.payload.purchaseResult === 'ACCEPTED') {
-          const speakOutput = `You have successfully cancelled your subscription. ${getRandomYesNoQuestion()}`;
-          const repromptOutput = getRandomYesNoQuestion();
+          const speakOutput = handlerInput.t('PURCHASE.CANCEL') + STRING_SPACE + handlerInput.t('FACT.ANOTHER');
+          const repromptOutput = handlerInput.t('FACT.ANOTHER');
           return handlerInput.responseBuilder
             .speak(speakOutput)
             .reprompt(repromptOutput)
             .getResponse();
         }
         if (handlerInput.requestEnvelope.request.payload.purchaseResult === 'NOT_ENTITLED') {
-          const speakOutput = `You don't currently have a subscription to cancel. ${getRandomYesNoQuestion()}`;
-          const repromptOutput = getRandomYesNoQuestion();
+          const speakOutput = handlerInput.t('PURCHASE.NOTHING_TO_CANCEL') + STRING_SPACE + handlerInput.t('FACT.ANOTHER');
+          const repromptOutput = handlerInput.t('FACT.ANOTHER');
           return handlerInput.responseBuilder
             .speak(speakOutput)
             .reprompt(repromptOutput)
@@ -632,8 +609,9 @@ const CancelResponseHandler = {
       // Something failed.
       console.log(`Connections.Response indicated failure. error: ${handlerInput.requestEnvelope.request.status.message}`);
 
+      const speakOutput = handlerInput.t('PURCHASE.ERROR');
       return handlerInput.responseBuilder
-        .speak('There was an error handling your purchase request. Please try again or contact us for help.')
+        .speak(speakOutput)
         .getResponse();
     });
   },
@@ -647,8 +625,10 @@ const SessionEndedHandler = {
   },
   handle(handlerInput) {
     console.log('IN: SessionEndedHandler.handle');
+
+    const speakOutput = handlerInput.t('GOODBYE');
     return handlerInput.responseBuilder
-      .speak(getRandomGoodbye())
+      .speak(speakOutput)
       .getResponse();
   },
 };
@@ -660,9 +640,11 @@ const FallbackHandler = {
   },
   handle(handlerInput) {
     console.log('IN FallbackHandler');
+
+    const speakOutput = handlerInput.t('ERROR');
     return handlerInput.responseBuilder
-      .speak('Sorry, I didn\'t understand what you meant. Please try again.')
-      .reprompt('Sorry, I didn\'t understand what you meant. Please try again.')
+      .speak(speakOutput)
+      .reprompt(speakOutput)
       .getResponse();
   },
 };
@@ -674,14 +656,17 @@ const ErrorHandler = {
   handle(handlerInput, error) {
     console.log(`Error handled: ${JSON.stringify(error.message)}`);
     console.log(`handlerInput: ${JSON.stringify(handlerInput)}`);
+    
+    const speakOutput = handlerInput.t('ERROR');
+    
     return handlerInput.responseBuilder
-      .speak('Sorry, I didn\'t understand what you meant. Please try again.')
-      .reprompt('Sorry, I didn\'t understand what you meant. Please try again.')
+      .speak(speakOutput)
+      .reprompt(speakOutput)
       .getResponse();
   },
 };
 
-function getResolvedValue(requestEnvelope, slotName) {
+function getResolvedId(requestEnvelope, slotName) {
   if (requestEnvelope &&
     requestEnvelope.request &&
     requestEnvelope.request.intent &&
@@ -691,14 +676,10 @@ function getResolvedValue(requestEnvelope, slotName) {
     requestEnvelope.request.intent.slots[slotName].resolutions.resolutionsPerAuthority &&
     requestEnvelope.request.intent.slots[slotName].resolutions.resolutionsPerAuthority[0] &&
     requestEnvelope.request.intent.slots[slotName].resolutions.resolutionsPerAuthority[0].values &&
-    requestEnvelope.request.intent.slots[slotName].resolutions.resolutionsPerAuthority[0]
-      .values[0] &&
-    requestEnvelope.request.intent.slots[slotName].resolutions.resolutionsPerAuthority[0].values[0]
-      .value &&
-    requestEnvelope.request.intent.slots[slotName].resolutions.resolutionsPerAuthority[0].values[0]
-      .value.name) {
-    return requestEnvelope.request.intent.slots[slotName].resolutions
-      .resolutionsPerAuthority[0].values[0].value.name;
+    requestEnvelope.request.intent.slots[slotName].resolutions.resolutionsPerAuthority[0].values[0] &&
+    requestEnvelope.request.intent.slots[slotName].resolutions.resolutionsPerAuthority[0].values[0].value &&
+    requestEnvelope.request.intent.slots[slotName].resolutions.resolutionsPerAuthority[0].values[0].value.id) {
+    return requestEnvelope.request.intent.slots[slotName].resolutions.resolutionsPerAuthority[0].values[0].value.id;
   }
   return undefined;
 }
@@ -724,12 +705,6 @@ function isEntitled(product) {
   return isProduct(product) &&
     product[0].entitled === 'ENTITLED';
 }
-
-/*
-function getProductByProductId(productId) {
-  var product_record = res.inSkillProducts.filter(record => record.referenceName == productRef);
-}
-*/
 
 const RequestLog = {
   process(handlerInput) {
@@ -763,6 +738,79 @@ const ResponseLog = {
   },
 };
 
+const FactDataLoader = {
+  process(handlerInput) {
+    const locale = handlerInput.requestEnvelope.request.locale;
+    const language = locale.split("-")[0];
+    // eslint-disable-next-line global-require
+    const localizedFacts = require(`./i18n/facts-${language}.js`);
+    const requestAttributes = handlerInput.attributesManager.getRequestAttributes();
+    requestAttributes.factData = localizedFacts.ALL_FACTS;
+  }
+}
+
+/**
+ * Request Interceptor for i18n handling
+ */
+const LocalizationInterceptor = {
+  process(handlerInput) {
+    const locale = handlerInput.requestEnvelope.request.locale;
+    const language = locale.split("-")[0];
+    let languageStrings = {};
+    // eslint-disable-next-line global-require
+    const fs = require('fs');
+    // load language strings if exist (e.g fr.js)
+    try {
+      if (fs.existsSync(`./i18n/${language}.js`)) {
+        // eslint-disable-next-line global-require
+        languageStrings[language] = require(`./i18n/${language}.js`);
+      }
+    } catch (err) {
+      console.log(`Error while loading file : ./i18n/${language}.js : ${err}`)
+    }
+    // load locale strings if exist (e.g fr-FR.js)
+    try {
+      if (fs.existsSync(`./i18n/${locale}.js`)) {
+        // eslint-disable-next-line global-require
+        languageStrings[locale] = require(`./i18n/${locale}.js`);
+      }
+    } catch (err) {
+      console.log(`Error while loading file : ./i18n/${locale}.js : ${err}`)
+    }
+    // init i18n
+    const localizationClient = i18n.use(sprintf).init({
+      lng: locale,
+      fallbackLng: 'en', // fallback to EN if locale doesn't exist
+      resources: languageStrings
+    });
+    // define l10n function
+    localizationClient.localize = function () {
+      const args = arguments;
+      let values = [];
+
+      for (var i = 1; i < args.length; i++) {
+        values.push(args[i]);
+      }
+      const value = i18n.t(args[0], {
+        returnObjects: true,
+        postProcess: 'sprintf',
+        sprintf: values
+      });
+
+      if (Array.isArray(value)) {
+        return value[Math.floor(Math.random() * value.length)];
+      } else {
+        return value;
+      }
+    }
+    // define function at handlerInput and RequestAttributes levels
+    const attributes = handlerInput.attributesManager.getRequestAttributes();
+    handlerInput.t = attributes.t = function (...args) { // pass on arguments to the localizationClient
+      return localizationClient.localize(...args);
+    };
+  }
+}
+
 exports.handler = Alexa.SkillBuilders.standard()
   .addRequestHandlers(
     LaunchRequestHandler,
@@ -782,6 +830,8 @@ exports.handler = Alexa.SkillBuilders.standard()
   .addRequestInterceptors(
     RequestLog,
     EntitledProductsCheck,
+    LocalizationInterceptor,
+    FactDataLoader
   )
   .addResponseInterceptors(ResponseLog)
   .addErrorHandlers(ErrorHandler)

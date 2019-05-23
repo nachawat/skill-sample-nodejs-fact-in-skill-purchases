@@ -147,16 +147,19 @@
           "name": "factType",
           "values": [
             {
+              "id": "random",
               "name": {
                 "value": "random"
               }
             },
             {
+              "id": "free",
               "name": {
                 "value": "free"
               }
             },
             {
+              "id": "all_access",
               "name": {
                 "value": "all_access",
                 "synonyms": [
@@ -165,16 +168,19 @@
               }
             },
             {
+              "id": "space",
               "name": {
                 "value": "space"
               }
             },
             {
+              "id": "history",
               "name": {
                 "value": "history"
               }
             },
             {
+              "id": "science",
               "name": {
                 "value": "science"
               }
